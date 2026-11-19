@@ -1,0 +1,110 @@
+/* While the script drives the native menu, keep it invisible. */
+html.cs-driving [role="menu"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* The native button stays in the DOM (the script clicks it) but is not shown. */
+html.cs-on [data-testid="model-selector-dropdown"] {
+  position: absolute !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+#cs-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  height: 28px;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1;
+  color: inherit;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+#cs-bar .cs-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#cs-bar .cs-label {
+  min-width: 52px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+#cs-bar .cs-group[data-kind="effort"] .cs-label {
+  min-width: 40px;
+  opacity: 0.6;
+}
+
+#cs-bar .cs-group.cs-off {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+#cs-bar.cs-busy input[type="range"] {
+  cursor: progress;
+}
+
+#cs-bar input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 72px;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  --p: 0%;
+  --accent: #d97757;
+}
+
+#cs-bar .cs-group[data-kind="effort"] input[type="range"] {
+  width: 88px;
+}
+
+#cs-bar input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 var(--p),
+    color-mix(in srgb, currentColor 18%, transparent) var(--p) 100%
+  );
+}
+
+#cs-bar input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+}
+
+#cs-bar input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+#cs-bar .cs-more {
+  all: unset;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.5;
+  font-size: 14px;
+}
+
+#cs-bar .cs-more:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
