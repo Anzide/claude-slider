@@ -1,22 +1,32 @@
-// Claude Slider: persistent sliders for model and effort on claude.ai.
+// Claude Slider: persistent sliders for model and effort on claude.ai,
+// in chat and in Claude Code (claude.ai/code).
 // The sliders drive the site's own model menu (kept invisible meanwhile),
 // so nothing here depends on private APIs.
 (() => {
   if (window.__claudeSlider) return;
   window.__claudeSlider = true;
 
-  const BTN = '[data-testid="model-selector-dropdown"]';
-  const STORE = 'claude-slider-options';
-  // Ascending capability, left to right. Replaced by what the menu really lists.
-  let models = ['Haiku 5.5', 'Sonnet 5.5', 'Opus 5.5', 'Fable 5.2'];
-  let efforts = ['Low', 'Medium', 'High', 'Extra', 'Max'];
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORE) || 'null');
-    if (saved?.models?.length) models = saved.models;
-    if (saved?.efforts?.length) efforts = saved.efforts;
-  } catch {}
+  const BTN = '[data-testid="model-selector-dropdown"], [data-testid="environment-row-model"]';
+  const STORE = 'claude-slider-options-v2';
+  const TIERS = ['haiku', 'sonnet', 'opus', 'fable', 'mythos']; // least to most capable
+  // Chat and Claude Code list different options, so each page kind keeps its own.
+  // These defaults are replaced by what the menu really lists.
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch {}
+  const page = () => (button()?.dataset.testid === 'environment-row-model' ? 'code' : 'chat');
+  const opts = () => (saved[page()] ||= {
+    models: ['Haiku 5.5', 'Sonnet 5.5', 'Opus 5.5', 'Fable 5.2'],
+    efforts: ['Low', 'Medium', 'High', 'Extra', 'Max'],
+    seen: false,
+  });
   const save = () => {
-    try { localStorage.setItem(STORE, JSON.stringify({ models, efforts })); } catch {}
+    opts().seen = true;
+    try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch {}
+  };
+  // Slider order: by tier, whatever order the menu uses.
+  const byTier = (names) => {
+    const rank = (n) => TIERS.findIndex((t) => n.toLowerCase().includes(t));
+    return names.map((n, i) => [n, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || b[1] - a[1]).map((x) => x[0]);
   };
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -61,7 +71,7 @@
     const menu = await waitFor(() => menus()[0]);
     if (menu) {
       const list = [...menu.querySelectorAll('[role="menuitemradio"]')].map(firstText).filter(Boolean);
-      if (list.length) { models = list.reverse(); save(); }
+      if (list.length) { opts().models = byTier(list); save(); }
     }
     return menu;
   };
@@ -76,7 +86,7 @@
     const sub = await waitFor(() => menus()[1]);
     if (sub) {
       const list = [...sub.querySelectorAll('[role="menuitemradio"]')].map(firstText).filter(Boolean);
-      if (list.length) { efforts = list; save(); }
+      if (list.length) { opts().efforts = list; save(); }
     }
     return sub;
   };
@@ -167,7 +177,7 @@
     label.className = 'cs-label';
     g.append(slider, label);
 
-    const list = () => (kind === 'model' ? models : efforts);
+    const list = () => opts()[kind === 'model' ? 'models' : 'efforts'];
     const span = () => Math.max(list().length - 1, 1);
     const st = { g, list, dragging: false, pos: 0, dots: 0 };
     const say = (text) => { if (label.textContent !== text) label.textContent = text; };
@@ -242,6 +252,45 @@
     return g;
   };
 
+  // ---- UltraCode (Claude Code only) ----------------------------------------
+  // Claude Code starts multi-agent orchestration when the prompt contains the
+  // word "ultracode". The button adds or removes that word in the composer,
+  // where the user can see it before sending.
+
+  const WORD = /\s?\bultracode\b/i;
+  const editor = () => {
+    for (let n = bar?.parentElement; n; n = n.parentElement) {
+      const e = n.querySelector('.ProseMirror[contenteditable="true"]');
+      if (e) return e;
+    }
+    return null;
+  };
+  const toggleUltra = () => {
+    const ed = editor();
+    if (!ed) return;
+    ed.focus();
+    const sel = getSelection();
+    const w = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      const m = WORD.exec(n.nodeValue);
+      if (!m) continue;
+      const r = document.createRange();
+      r.setStart(n, m.index);
+      r.setEnd(n, m.index + m[0].length);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      document.execCommand('delete');
+      return sync();
+    }
+    sel.selectAllChildren(ed.lastElementChild || ed);
+    sel.collapseToEnd();
+    const text = ed.innerText.replace(/\n+$/, '');
+    document.execCommand('insertText', false, `${text && !/\s$/.test(text) ? ' ' : ''}ultracode`);
+    sync();
+  };
+
+  let ultra = null;
+  const learning = {};
   const build = () => {
     bar = document.createElement('div');
     bar.id = 'cs-bar';
@@ -251,9 +300,17 @@
     more.textContent = '⋯';
     more.title = '打开原生模型菜单（更多模型）';
     more.addEventListener('click', () => { const b = button(); if (b) press(b); });
+    ultra = document.createElement('button');
+    ultra.type = 'button';
+    ultra.className = 'cs-ultra';
+    ultra.textContent = 'UltraCode';
+    ultra.title = '在输入框里加上或去掉 ultracode（多智能体编排，用量很大）';
+    ultra.addEventListener('mousedown', (e) => e.preventDefault()); // keep the composer focused
+    ultra.addEventListener('click', toggleUltra);
     bar.append(
       makeGroup('model', '模型', 96, setModel),
       makeGroup('effort', '推理强度', 112, setEffort),
+      ultra,
       more,
     );
     // Keep the composer from treating slider use as a click on itself.
@@ -273,6 +330,16 @@
     // Light text means a dark theme: the thumb then needs a dark face.
     const rgb = getComputedStyle(bar).color.match(/[\d.]+/g) || [0, 0, 0];
     bar.classList.toggle('cs-dark', (+rgb[0] + +rgb[1] + +rgb[2]) / 3 > 140);
+
+    const code = page() === 'code';
+    const armed = code && WORD.test(editor()?.innerText || '');
+    if (ultra.hidden === code) ultra.hidden = !code;
+    if (ultra.classList.contains('cs-active') !== armed) {
+      ultra.classList.toggle('cs-active', armed);
+      ultra.setAttribute('aria-pressed', armed);
+    }
+    // First visit to this kind of page: learn its real option lists once, invisibly.
+    if (!opts().seen && !learning[page()]) { learning[page()] = true; discover(); }
 
     const cur = current();
     for (const kind of ['model', 'effort']) {
@@ -298,6 +365,4 @@
   });
 
   sync();
-  // First run: learn the real option lists once, invisibly.
-  if (!localStorage.getItem(STORE)) waitFor(button, 10000).then((b) => b && discover());
 })();

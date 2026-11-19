@@ -5,7 +5,8 @@ html.cs-driving [role="menu"] {
 }
 
 /* The native button stays in the DOM (the script clicks it) but is not shown. */
-html.cs-on [data-testid="model-selector-dropdown"] {
+html.cs-on [data-testid="model-selector-dropdown"],
+html.cs-on [data-testid="environment-row-model"] {
   position: absolute !important;
   opacity: 0 !important;
   pointer-events: none !important;
@@ -116,6 +117,31 @@ html.cs-on [data-testid="model-selector-dropdown"] {
 
 #cs-bar .cs-slider.cs-keys:focus .cs-thumb {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--cs-ink) 35%, transparent);
+}
+
+#cs-bar .cs-ultra {
+  all: unset;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 24px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+#cs-bar .cs-ultra[hidden] {
+  display: none;
+}
+
+#cs-bar .cs-ultra:hover {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+#cs-bar .cs-ultra.cs-active {
+  background: var(--cs-ink);
+  color: #fff;
 }
 
 #cs-bar .cs-more {
