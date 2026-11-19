@@ -5,8 +5,7 @@ html.cs-driving [role="menu"] {
 }
 
 /* The native button stays in the DOM (the script clicks it) but is not shown. */
-html.cs-on [data-testid="model-selector-dropdown"],
-html.cs-on [data-testid="environment-row-model"] {
+html.cs-on [data-cs-native] {
   position: absolute !important;
   opacity: 0 !important;
   pointer-events: none !important;
@@ -38,9 +37,10 @@ html.cs-on [data-testid="environment-row-model"] {
   gap: 6px;
 }
 
-/* Fixed width, so the text changing mid-drag never moves anything. */
+/* Fixed width (set by the script to fit the longest option), so the text
+   changing mid-drag never moves anything. */
 #cs-bar .cs-label {
-  width: 62px;
+  width: 72px;
   overflow: hidden;
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;

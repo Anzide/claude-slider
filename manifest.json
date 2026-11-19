@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Claude Slider",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "把 claude.ai 的模型选择和推理强度变成输入框旁常驻的两根滑动条。",
   "content_scripts": [
     {

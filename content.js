@@ -1,32 +1,46 @@
 // Claude Slider: persistent sliders for model and effort on claude.ai,
-// in chat and in Claude Code (claude.ai/code).
+// in chat and in Claude Code (claude.ai/code), including sessions that run
+// on another computer.
 // The sliders drive the site's own model menu (kept invisible meanwhile),
 // so nothing here depends on private APIs.
 (() => {
   if (window.__claudeSlider) return;
   window.__claudeSlider = true;
 
-  const BTN = '[data-testid="model-selector-dropdown"], [data-testid="environment-row-model"]';
-  const STORE = 'claude-slider-options-v2';
+  // The model button: chat, the Claude Code start page and Claude Code sessions
+  // each give it a different data-testid, all containing "model".
+  const BTN = 'button[aria-haspopup="menu"][data-testid*="model"]';
+  const STORE = 'claude-slider-options-v3';
   const TIERS = ['haiku', 'sonnet', 'opus', 'fable', 'mythos']; // least to most capable
-  // Chat and Claude Code list different options, so each page kind keeps its own.
-  // These defaults are replaced by what the menu really lists.
-  let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch {}
-  const page = () => (button()?.dataset.testid === 'environment-row-model' ? 'code' : 'chat');
-  const opts = () => (saved[page()] ||= {
+  let saved = { lists: {}, ultra: {} };
+  try { saved = { ...saved, ...JSON.parse(localStorage.getItem(STORE) || '{}') }; } catch {}
+  const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch {} };
+  // Each kind of page lists its own options. These defaults are replaced by
+  // what the menu really lists.
+  const opts = () => (saved.lists[button()?.dataset.testid || ''] ||= {
     models: ['Haiku 5.5', 'Sonnet 5.5', 'Opus 5.5', 'Fable 5.2'],
     efforts: ['Low', 'Medium', 'High', 'Extra', 'Max'],
     seen: false,
   });
-  const save = () => {
-    opts().seen = true;
-    try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch {}
-  };
+  const save = () => { opts().seen = true; persist(); };
   // Slider order: by tier, whatever order the menu uses.
   const byTier = (names) => {
     const rank = (n) => TIERS.findIndex((t) => n.toLowerCase().includes(t));
     return names.map((n, i) => [n, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || b[1] - a[1]).map((x) => x[0]);
+  };
+
+  // Ultracode is a switch in the Effort submenu, and only some Claude Code
+  // sessions have it. Whether this page has it is remembered per path.
+  const here = () => location.pathname;
+  const inCode = () => here().startsWith('/code');
+  const ultraBox = (sub) => [...sub.querySelectorAll('[role="menuitemcheckbox"]')]
+    .find((e) => /ultracode/i.test(e.textContent));
+  const noteUltra = (has) => {
+    if (!inCode() || saved.ultra[here()] === has) return;
+    const keys = Object.keys(saved.ultra);
+    if (keys.length > 300) delete saved.ultra[keys[0]];
+    saved.ultra[here()] = has;
+    persist();
   };
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -54,12 +68,16 @@
     return '';
   };
   const menus = () => [...document.querySelectorAll('[role="menu"]')];
-  const button = () => document.querySelector(BTN);
+  const button = () => [...document.querySelectorAll(BTN)].find((b) => b.offsetParent) || null;
 
-  // "Fable 5.2\n High" -> { model, effort }
+  // "Fable 5.2\n High\n · Ultracode" -> { model, effort, ultra }
   const current = () => {
     const lines = (button()?.innerText || '').split('\n').map((s) => s.trim()).filter(Boolean);
-    return { model: lines[0] || '', effort: lines[1] || '' };
+    return {
+      model: lines[0] || '',
+      effort: lines[1] || '',
+      ultra: lines.slice(2).some((l) => /ultracode/i.test(l)),
+    };
   };
 
   // ---- driving the native menu -------------------------------------------
@@ -87,6 +105,7 @@
     if (sub) {
       const list = [...sub.querySelectorAll('[role="menuitemradio"]')].map(firstText).filter(Boolean);
       if (list.length) { opts().efforts = list; save(); }
+      noteUltra(!!ultraBox(sub));
     }
     return sub;
   };
@@ -132,21 +151,46 @@
     return queue;
   };
 
-  const setModel = (name) => drive(async (menu) => {
-    if (!pick(menu, name)) return;
-    // Effort levels can differ per model: re-read them for the new one.
-    await waitFor(() => current().model === name, 1500);
-    await closeMenu();
-    const again = await openMenu();
-    if (again) await openEffort(again);
-  }, 'model', name);
+  const setModel = (name) => {
+    // The site remembers an effort level per model. Keep the one in use instead.
+    const keep = chosen.effort ?? current().effort;
+    const held = keep && !chosen.effort;
+    if (held) chosen.effort = keep;
+    return drive(async (menu) => {
+      try {
+        if (!pick(menu, name)) return;
+        await waitFor(() => current().model === name, 1500);
+        await closeMenu();
+        // Effort levels can differ per model: re-read them for the new one.
+        const again = await openMenu();
+        const sub = again && await openEffort(again);
+        if (sub && keep && current().effort !== keep && pick(sub, keep)) {
+          await waitFor(() => current().effort === keep, 1500);
+        }
+      } finally {
+        if (held && chosen.effort === keep) delete chosen.effort;
+      }
+    }, 'model', name);
+  };
 
   const setEffort = (name) => drive(async (menu) => {
     const sub = await openEffort(menu);
     if (sub && pick(sub, name)) await waitFor(() => current().effort === name, 1500);
   }, 'effort', name);
 
-  const discover = () => drive(async (menu) => { await openEffort(menu); });
+  const setUltra = (on) => drive(async (menu) => {
+    const sub = await openEffort(menu);
+    const box = sub && ultraBox(sub);
+    if (!box) return;
+    if ((box.getAttribute('aria-checked') === 'true') !== on) fire(box, 'click', MouseEvent);
+    await waitFor(() => current().ultra === on, 1500);
+  }, 'ultra', on);
+
+  // Read the option lists, and whether this page has Ultracode.
+  const discover = () => drive(async (menu) => {
+    await openEffort(menu);
+    if (saved.ultra[here()] === undefined) noteUltra(false);
+  });
 
   // ---- the bar ------------------------------------------------------------
 
@@ -195,6 +239,23 @@
       slider.setAttribute('aria-valuetext', name);
     };
     st.say = say;
+    // Size the label for the longest option, so no name is cut off and the
+    // width never changes while dragging.
+    st.fit = () => {
+      const key = list().join('|');
+      if (st.fitted === key) return;
+      st.fitted = key;
+      const probe = label.cloneNode();
+      probe.style.cssText = 'position:absolute;visibility:hidden;width:auto';
+      g.append(probe);
+      let w = 0;
+      for (const name of list()) {
+        probe.textContent = name;
+        w = Math.max(w, probe.getBoundingClientRect().width);
+      }
+      probe.remove();
+      if (w) label.style.width = `${Math.ceil(w) + 2}px`;
+    };
     st.setDots = () => {
       const n = list().length;
       if (st.dots === n) return;
@@ -252,43 +313,6 @@
     return g;
   };
 
-  // ---- UltraCode (Claude Code only) ----------------------------------------
-  // Claude Code starts multi-agent orchestration when the prompt contains the
-  // word "ultracode". The button adds or removes that word in the composer,
-  // where the user can see it before sending.
-
-  const WORD = /\s?\bultracode\b/i;
-  const editor = () => {
-    for (let n = bar?.parentElement; n; n = n.parentElement) {
-      const e = n.querySelector('.ProseMirror[contenteditable="true"]');
-      if (e) return e;
-    }
-    return null;
-  };
-  const toggleUltra = () => {
-    const ed = editor();
-    if (!ed) return;
-    ed.focus();
-    const sel = getSelection();
-    const w = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT);
-    for (let n = w.nextNode(); n; n = w.nextNode()) {
-      const m = WORD.exec(n.nodeValue);
-      if (!m) continue;
-      const r = document.createRange();
-      r.setStart(n, m.index);
-      r.setEnd(n, m.index + m[0].length);
-      sel.removeAllRanges();
-      sel.addRange(r);
-      document.execCommand('delete');
-      return sync();
-    }
-    sel.selectAllChildren(ed.lastElementChild || ed);
-    sel.collapseToEnd();
-    const text = ed.innerText.replace(/\n+$/, '');
-    document.execCommand('insertText', false, `${text && !/\s$/.test(text) ? ' ' : ''}ultracode`);
-    sync();
-  };
-
   let ultra = null;
   const learning = {};
   const build = () => {
@@ -304,9 +328,9 @@
     ultra.type = 'button';
     ultra.className = 'cs-ultra';
     ultra.textContent = 'UltraCode';
-    ultra.title = '在输入框里加上或去掉 ultracode（多智能体编排，用量很大）';
+    ultra.title = 'Ultracode：多智能体编排，用量很大';
     ultra.addEventListener('mousedown', (e) => e.preventDefault()); // keep the composer focused
-    ultra.addEventListener('click', toggleUltra);
+    ultra.addEventListener('click', () => setUltra(!(chosen.ultra ?? current().ultra)));
     bar.append(
       makeGroup('model', '模型', 96, setModel),
       makeGroup('effort', '推理强度', 112, setEffort),
@@ -331,23 +355,38 @@
     const rgb = getComputedStyle(bar).color.match(/[\d.]+/g) || [0, 0, 0];
     bar.classList.toggle('cs-dark', (+rgb[0] + +rgb[1] + +rgb[2]) / 3 > 140);
 
-    const code = page() === 'code';
-    const armed = code && WORD.test(editor()?.innerText || '');
-    if (ultra.hidden === code) ultra.hidden = !code;
+    // The native button stays in the DOM (the script clicks it) but is not shown.
+    if (!btn.hasAttribute('data-cs-native')) btn.setAttribute('data-cs-native', '');
+
+    const now = current();
+    // An open Effort submenu, ours or the user's, shows whether Ultracode exists here.
+    const sub = menus()[1];
+    if (sub && [...sub.querySelectorAll('[role="menuitemradio"]')].some((e) => firstText(e) === now.effort)) {
+      noteUltra(!!ultraBox(sub));
+    }
+    if (now.ultra) noteUltra(true);
+    const armed = chosen.ultra ?? now.ultra;
+    const show = saved.ultra[here()] === true;
+    if (ultra.hidden === show) ultra.hidden = !show;
     if (ultra.classList.contains('cs-active') !== armed) {
       ultra.classList.toggle('cs-active', armed);
       ultra.setAttribute('aria-pressed', armed);
     }
-    // First visit to this kind of page: learn its real option lists once, invisibly.
-    if (!opts().seen && !learning[page()]) { learning[page()] = true; discover(); }
+    // First visit: learn this page's option lists once, invisibly. Claude Code
+    // pages are also checked once each for Ultracode.
+    const todo = `${btn.dataset.testid} ${inCode() ? here() : ''}`;
+    if ((!opts().seen || (inCode() && saved.ultra[here()] === undefined)) && !learning[todo]) {
+      learning[todo] = true;
+      discover();
+    }
 
-    const cur = current();
     for (const kind of ['model', 'effort']) {
       const st = groups[kind];
       st.setDots();
-      st.g.classList.toggle('cs-off', kind === 'effort' && !cur.effort);
+      st.fit();
+      st.g.classList.toggle('cs-off', kind === 'effort' && !now.effort);
       if (st.dragging) continue;
-      const want = chosen[kind] ?? cur[kind];
+      const want = chosen[kind] ?? now[kind];
       const i = st.list().indexOf(want);
       // A model from "More models" has no stop: show its name, leave the thumb.
       if (i >= 0) st.setPos(i); else st.say(want || '—');
