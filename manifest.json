@@ -1,13 +1,25 @@
 {
   "manifest_version": 3,
   "name": "Claude Slider",
-  "version": "1.4.0",
-  "description": "把 claude.ai 的模型选择和推理强度变成输入框旁常驻的两根滑动条。",
+  "version": "1.4.1",
+  "description": "Persistent model and effort sliders for claude.ai, in chat and in Claude Code. Unofficial.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "content_scripts": [
     {
-      "matches": ["https://claude.ai/*"],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "matches": [
+        "https://claude.ai/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
   ]
