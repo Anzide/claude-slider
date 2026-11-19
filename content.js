@@ -176,6 +176,8 @@
     st.setPos = (pos, text) => {
       st.pos = pos;
       slider.style.setProperty('--x', `${R + (pos / span()) * (width - 2 * R)}px`);
+      // Stops already passed sit on the fill and need the lighter dot.
+      track.querySelectorAll('.cs-dot').forEach((d, i) => d.classList.toggle('cs-on', i < pos));
       const name = text ?? list()[Math.round(pos)] ?? '';
       say(name);
       slider.setAttribute('aria-valuemax', span());
@@ -271,9 +273,6 @@
     // Light text means a dark theme: the thumb then needs a dark face.
     const rgb = getComputedStyle(bar).color.match(/[\d.]+/g) || [0, 0, 0];
     bar.classList.toggle('cs-dark', (+rgb[0] + +rgb[1] + +rgb[2]) / 3 > 140);
-    // The row's text is translucent; the filled track uses the same colour at full strength.
-    const ink = `rgb(${rgb[0]} ${rgb[1]} ${rgb[2]})`;
-    if (bar.style.getPropertyValue('--cs-ink') !== ink) bar.style.setProperty('--cs-ink', ink);
 
     const cur = current();
     for (const kind of ['model', 'effort']) {

@@ -23,7 +23,7 @@ html.cs-on [data-testid="model-selector-dropdown"] {
   white-space: nowrap;
   user-select: none;
   flex-shrink: 0;
-  --cs-ink: currentColor; /* replaced by the script with the opaque text colour */
+  --cs-ink: #d97757; /* Claude's clay */
   --cs-thumb: #fff;
 }
 
@@ -88,7 +88,11 @@ html.cs-on [data-testid="model-selector-dropdown"] {
   height: 4px;
   margin: -2px 0 0 -2px;
   border-radius: 50%;
-  background: #8a8a8a;
+  background: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+#cs-bar .cs-dot.cs-on {
+  background: rgb(255 255 255 / 0.7);
 }
 
 #cs-bar .cs-thumb {
@@ -111,7 +115,7 @@ html.cs-on [data-testid="model-selector-dropdown"] {
 #cs-bar .cs-slider.cs-drag { cursor: grabbing; }
 
 #cs-bar .cs-slider.cs-keys:focus .cs-thumb {
-  box-shadow: 0 0 0 3px color-mix(in srgb, #d97757 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cs-ink) 35%, transparent);
 }
 
 #cs-bar .cs-more {
