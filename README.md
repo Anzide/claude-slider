@@ -23,14 +23,3 @@ Drag a slider or click anywhere on its track. Arrow keys work when a slider has 
 4. Reload any open claude.ai tabs.
 
 After you pull an update, click the reload icon on the extension's card in `chrome://extensions`, then reload claude.ai.
-
-## How it works
-
-The extension is one content script with no permissions beyond running on `claude.ai`. When you move a slider it opens the site's own model menu (kept invisible for that moment), clicks the matching item, and closes it. It calls no private API and sends no data anywhere.
-
-The option lists are read from the menu itself and cached in the page's `localStorage`, so new models or effort levels show up without an update. The first time you open a Claude Code session, the extension opens the menu once, invisibly, to see whether that session has Ultracode.
-
-## Limits
-
-- It depends on the page's DOM (the `data-testid` of the model button and ARIA menu roles). A redesign of claude.ai can break it.
-- A model picked from "More models" is shown by name, but it has no stop on the slider.
